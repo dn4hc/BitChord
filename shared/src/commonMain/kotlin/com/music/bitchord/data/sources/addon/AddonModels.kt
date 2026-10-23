@@ -109,19 +109,41 @@ data class AddonTrack(
     val lossless: Boolean = false,
     val year: Int? = null,
     val isrc: String? = null,
+    // Official BitChord addon wire fields. Keep older Apple-port spellings
+    // above for compatibility with previously configured addon servers.
+    val duration: Double? = null,
+    @SerialName("artworkURL") val artworkURL: String? = null,
+    @SerialName("albumArtworkURL") val albumArtworkURL: String? = null,
+    val format: String? = null,
+    val audioQuality: String? = null,
+    @SerialName("streamURL") val streamURL: String? = null,
+    val sampleRate: Int? = null,
+    val bitrate: Long? = null,
 ) {
+    val effectiveDurationSec: Int? get() = durationSec ?: duration?.toInt()
+    val effectiveArtworkUrl: String? get() = artworkUrl ?: artworkURL ?: albumArtworkURL
+    val effectiveCodec: String? get() = codec ?: format
+    val effectiveSampleRateHz: Int? get() = sampleRateHz ?: sampleRate
+    val effectiveBitrateKbps: Int?
+        get() = bitrateKbps ?: bitrate?.let { (if (it > 10_000) it / 1_000 else it).toInt() }
+
     /**
-     * What this row claims about itself, for the resolver's ranking.
-     *
-     * Read from the row's own fields rather than trusted wholesale: an addon that
-     * sets `lossless` but names an mp3 codec is describing a transcode it has not
-     * performed, and ranking it as bit-exact would put it above a real FLAC.
+     * Do not trust a lossless label over an explicit lossy codec.
+     * The decoder verifies the actual stream after it opens the URL.
      */
     val claimsLossless: Boolean
-        get() = lossless || codec?.lowercase() in LOSSLESS_CODECS
+        get() {
+            val declaredCodec = effectiveCodec?.lowercase()
+            return when {
+                declaredCodec in LOSSY_CODECS -> false
+                declaredCodec in LOSSLESS_CODECS -> true
+                else -> lossless || audioQuality?.contains("lossless", ignoreCase = true) == true
+            }
+        }
 
     private companion object {
         val LOSSLESS_CODECS = setOf("flac", "alac", "wav", "aiff", "ape", "wv", "dsf", "dff")
+        val LOSSY_CODECS = setOf("mp3", "aac", "opus", "vorbis", "ogg", "m4a", "eac3", "ac3")
     }
 }
 
@@ -145,7 +167,22 @@ data class AddonStream(
     val durationSec: Int? = null,
     /** ISO-8601 or epoch seconds. A five-minute default covers an addon that omits it. */
     val expiresAt: String? = null,
+    // Official BitChord stream wire fields.
+    val format: String? = null,
+    val sampleRate: Int? = null,
+    val bitrate: Long? = null,
+    val container: String? = null,
+    val manifest: String? = null,
+    val encrypted: Boolean = false,
+    val quality: String? = null,
+    val error: String? = null,
 ) {
+    val effectiveCodec: String?
+        get() = codec ?: format?.takeUnless { it.lowercase() in setOf("dash", "hls") }
+    val effectiveSampleRateHz: Int? get() = sampleRateHz ?: sampleRate
+    val effectiveBitrateKbps: Int?
+        get() = bitrateKbps ?: bitrate?.let { (if (it > 10_000) it / 1_000 else it).toInt() }
+
     /**
      * Dolby Atmos, read from every spelling an addon might send.
      *
