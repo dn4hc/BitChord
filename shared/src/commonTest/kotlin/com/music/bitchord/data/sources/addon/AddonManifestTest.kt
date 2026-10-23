@@ -2,6 +2,7 @@ package com.music.bitchord.data.sources.addon
 
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -57,4 +58,41 @@ class AddonManifestTest {
     fun `no capabilities is rejected`() {
         assertFalse(AddonManifest(id = "empty").isPlayable)
     }
+    @Test
+    fun `official search response maps track metadata and lossless claims`() {
+        val response = json.decodeFromString<AddonSearchResponse>(
+            """{"tracks":[{"id":"123","title":"Test Song","artist":"Example","duration":242,
+               "artworkURL":"https://example.org/art.jpg","format":"flac","audioQuality":"LOSSLESS",
+               "sampleRate":96000,"bitrate":2800000}]}"""
+        )
+        val track = response.tracks.single()
+        assertEquals(242, track.effectiveDurationSec)
+        assertEquals("https://example.org/art.jpg", track.effectiveArtworkUrl)
+        assertEquals("flac", track.effectiveCodec)
+        assertEquals(96000, track.effectiveSampleRateHz)
+        assertEquals(2800, track.effectiveBitrateKbps)
+        assertTrue(track.claimsLossless)
+    }
+
+    @Test
+    fun `lossy codec overrides a claimed lossless label`() {
+        val track = json.decodeFromString<AddonTrack>(
+            """{"id":"bad","title":"Lossy","format":"mp3","audioQuality":"LOSSLESS"}"""
+        )
+        assertFalse(track.claimsLossless)
+    }
+
+    @Test
+    fun `official stream response maps sample rate and bitrate`() {
+        val stream = json.decodeFromString<AddonStream>(
+            """{"url":"https://example.org/audio.flac","format":"flac",
+                "codec":"flac","sampleRate":96000,"bitDepth":24,"bitrate":2800000,
+                "container":"flac","manifest":"none","encrypted":false}"""
+        )
+        assertEquals("flac", stream.effectiveCodec)
+        assertEquals(96000, stream.effectiveSampleRateHz)
+        assertEquals(2800, stream.effectiveBitrateKbps)
+        assertFalse(stream.encrypted)
+    }
+
 }
