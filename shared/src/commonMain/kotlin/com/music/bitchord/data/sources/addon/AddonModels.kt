@@ -30,15 +30,23 @@ data class AddonManifest(
     val displayName: String get() = name.ifBlank { id.ifBlank { "Addon" } }
 
     /**
-     * Whether this addon can take a track from a query to audio.
+     * Whether the manifest declares the two capabilities BitChord needs.
      *
-     * The gate the sources screen tests against, and deliberately strict: an
-     * addon that cannot search or cannot stream is not something that can be
-     * trusted with a track, and accepting it would mean it silently returns
-     * nothing on every track instead of saying so while the user is still looking
-     * at the URL they pasted.
+     * The published addon protocol lists capabilities in `resources`
+     * (for example ["search", "stream"]). Endpoint descriptor objects are
+     * optional. Requiring both objects rejected playable resource-only
+     * manifests with "declares search, stream — needs search and stream".
+     *
+     * Accept either representation, but never a manifest missing a capability.
+     * Reachability is checked separately with a real /search probe.
      */
-    val isPlayable: Boolean get() = search != null && stream != null
+    val isPlayable: Boolean
+        get() {
+            val declared = resources.map { it.trim().lowercase() }.toSet()
+            val hasSearch = "search" in declared || search != null
+            val hasStream = "stream" in declared || stream != null
+            return hasSearch && hasStream
+        }
 }
 
 @Serializable
