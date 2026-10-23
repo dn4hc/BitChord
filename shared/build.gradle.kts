@@ -98,7 +98,10 @@ val generateDefaults by tasks.registering {
     // silently refuses to change, so a distributor who removes a server ships the
     // server anyway. A missing file is a legitimate input state, not an error: the
     // empty default is the shipped one.
-    inputs.file(localFile).optional()
+    // Gradle 9 rejects missing files even when the input is marked optional.
+    // When absent, use the default build value and track its presence explicitly.
+    if (localFile.exists()) inputs.file(localFile)
+    inputs.property("localPropertiesExists", localFile.exists())
     inputs.property("listenTogetherServer", listenTogetherServer)
     outputs.file(out)
     doLast {
