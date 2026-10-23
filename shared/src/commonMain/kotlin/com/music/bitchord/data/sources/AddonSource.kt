@@ -103,7 +103,7 @@ class AddonSource(override val config: SourceConfig) : MusicSource, ConfigBacked
             return null
         }
         val answer = result.getOrNull() ?: return null
-        if (answer.url.isBlank()) return null
+        if (answer.url.isBlank() || answer.encrypted) return null
         return answer.toSourceStream(config.id, request)
     }
 
@@ -182,11 +182,11 @@ internal fun AddonTrack.asRow(): AddonRow = AddonRow(
     title = title,
     artist = artist,
     album = album,
-    durationSec = durationSec,
-    artworkUrl = artworkUrl,
-    codec = codec,
-    kbps = bitrateKbps,
-    sampleRateHz = sampleRateHz,
+    durationSec = effectiveDurationSec,
+    artworkUrl = effectiveArtworkUrl,
+    codec = effectiveCodec,
+    kbps = effectiveBitrateKbps,
+    sampleRateHz = effectiveSampleRateHz,
     bitDepth = bitDepth,
     explicit = explicit,
     lossless = claimsLossless,
@@ -206,18 +206,19 @@ internal fun AddonStream.toSourceStream(
     configId: String,
     request: StreamRequest,
 ): SourceStream {
-    val claimedCodec = codec?.lowercase()
+    val resolvedCodec = effectiveCodec
+    val claimedCodec = resolvedCodec?.lowercase()
     val claimedLossless = claimedCodec != null && claimedCodec in LOSSLESS_CODECS
-    val servedKbps = bitrateKbps ?: 0
+    val servedKbps = effectiveBitrateKbps ?: 0
     val cap = request.kbpsCeiling
     val askedLossless = request is StreamRequest.Lossless
     val overCap = cap != null && servedKbps > cap
     return SourceStream(
         url = url,
         format = StreamFormat(
-            codec = codec,
-            kbps = bitrateKbps,
-            sampleRateHz = sampleRateHz,
+            codec = resolvedCodec,
+            kbps = effectiveBitrateKbps,
+            sampleRateHz = effectiveSampleRateHz,
             bitDepth = bitDepth,
         ),
         headers = headers,
